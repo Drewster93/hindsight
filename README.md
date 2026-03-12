@@ -1,27 +1,45 @@
 # @hindsight/mcp-server
 
-MCP (Model Context Protocol) server for [Hindsight](https://www.usehindsight.com/) — Win-Loss Intelligence platform.
+Web-hosted MCP server for [Hindsight](https://www.usehindsight.com/) — Win-Loss Intelligence platform.
 
-Provides AI assistants like Claude with access to competitive intelligence, deal data, and win-loss insights through Hindsight's API.
+Provides AI assistants like Claude with access to competitive intelligence, deal data, and win-loss insights. Clients connect with just their Hindsight API key.
 
-## Quick Setup
+## How It Works
 
-Add to your `claude_desktop_config.json`:
+The server runs as an HTTP service. MCP clients (Claude Desktop, Cursor, etc.) connect to it via URL and pass their Hindsight API key in the `Authorization` header. The server creates a session per client and proxies all tool calls to the Hindsight API.
+
+```
+MCP Client  ──Bearer API_KEY──>  This Server  ──Bearer API_KEY──>  Hindsight API
+```
+
+## Quick Start
+
+```bash
+npm install
+npm run build
+npm start
+```
+
+The server starts on port 3000 (configurable via `PORT` env var).
+
+## Client Configuration
+
+### Claude Desktop / Cursor / Cline
 
 ```json
 {
   "mcpServers": {
     "hindsight": {
-      "command": "npx",
-      "args": ["-y", "@hindsight/mcp-server"],
-      "env": {
-        "HINDSIGHT_API_KEY": "your_api_key",
-        "HINDSIGHT_ORG_ID": "your_org_id"
+      "url": "http://localhost:3000/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_HINDSIGHT_API_KEY"
       }
     }
   }
 }
 ```
+
+That's it — just your API key.
 
 ### Config file locations
 
@@ -30,10 +48,18 @@ Add to your `claude_desktop_config.json`:
 
 ## Environment Variables
 
-| Variable | Required | Description |
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `PORT` | No | `3000` | HTTP port to listen on |
+
+## Endpoints
+
+| Path | Method | Description |
 |---|---|---|
-| `HINDSIGHT_API_KEY` | Yes | Your Hindsight API key (from the dashboard) |
-| `HINDSIGHT_ORG_ID` | Yes | Your Hindsight organization ID |
+| `/mcp` | POST | MCP messages (initialization + tool calls) |
+| `/mcp` | GET | SSE stream for server-initiated messages |
+| `/mcp` | DELETE | Tear down a session |
+| `/health` | GET | Health check |
 
 ## Available Tools
 
@@ -59,19 +85,19 @@ Add to your `claude_desktop_config.json`:
 
 ## Example Usage
 
-Once configured, ask Claude:
+Once connected, ask Claude:
 
 - "Find deals where we lost to Competitor X in the last quarter"
 - "What are the top security objections we've encountered?"
 - "Search for pricing discussions in enterprise deals"
 - "Show me competitor intel on Salesforce's integration strategy"
 
-## Development
+## Deployment
+
+Deploy anywhere that runs Node.js. Set the `PORT` env var if needed.
 
 ```bash
-npm install
-npm run build
-npm start
+PORT=8080 npm start
 ```
 
 ## License

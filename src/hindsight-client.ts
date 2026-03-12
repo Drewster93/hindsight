@@ -1,10 +1,5 @@
 const BASE_URL = "https://app.usehindsight.com/api/v1";
 
-export interface HindsightConfig {
-  apiKey: string;
-  orgId: string;
-}
-
 export interface Citation {
   document_id: string;
   document_name: string;
@@ -134,11 +129,9 @@ export interface HindsightError {
 
 export class HindsightClient {
   private apiKey: string;
-  private orgId: string;
 
-  constructor(config: HindsightConfig) {
-    this.apiKey = config.apiKey;
-    this.orgId = config.orgId;
+  constructor(apiKey: string) {
+    this.apiKey = apiKey;
   }
 
   private async request<T>(
@@ -151,7 +144,6 @@ export class HindsightClient {
       ...((options.headers as Record<string, string>) || {}),
     };
 
-    // Only set Content-Type for JSON bodies
     if (options.body && typeof options.body === "string") {
       headers["Content-Type"] = "application/json";
     }
@@ -250,7 +242,6 @@ export class HindsightClient {
       method: "POST",
       body: JSON.stringify({
         query: params.query,
-        org_id: this.orgId,
         limit: params.limit ?? 10,
       }),
     });
@@ -269,7 +260,6 @@ export class HindsightClient {
     return this.request<SelectDealResult>("/mcp/select_deal", {
       method: "POST",
       body: JSON.stringify({
-        org_id: this.orgId,
         filters: params.filters,
         limit: params.limit ?? 20,
       }),
@@ -286,7 +276,6 @@ export class HindsightClient {
       method: "POST",
       body: JSON.stringify({
         query: params.query,
-        org_id: this.orgId,
         limit: params.limit ?? 15,
         include_deal_metadata: params.include_deal_metadata ?? true,
       }),
@@ -307,7 +296,6 @@ export class HindsightClient {
         body: JSON.stringify({
           deal_ids: params.deal_ids,
           query: params.query,
-          org_id: this.orgId,
           document_types: params.document_types,
           limit: params.limit ?? 30,
         }),
@@ -324,7 +312,6 @@ export class HindsightClient {
       method: "POST",
       body: JSON.stringify({
         query: params.query,
-        org_id: this.orgId,
         limit: params.limit ?? 10,
       }),
     });
@@ -342,7 +329,6 @@ export class HindsightClient {
       body: JSON.stringify({
         query: params.query,
         competitor_id: params.competitor_id,
-        org_id: this.orgId,
         source: params.source,
         limit: params.limit ?? 20,
       }),
@@ -357,7 +343,6 @@ export class HindsightClient {
       method: "POST",
       body: JSON.stringify({
         keyword_query: params.keyword_query,
-        org_id: this.orgId,
       }),
     });
   }
