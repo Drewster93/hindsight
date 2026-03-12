@@ -1,0 +1,24 @@
+{
+  "name": "@hindsight/mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Hindsight Win-Loss Intelligence API",
+  "main": "dist/index.js",
+  "bin": {
+    "hindsight-mcp-server": "dist/index.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch"
+  },
+  "keywords": ["mcp", "hindsight", "competitive-intelligence", "win-loss"],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}
