@@ -32,101 +32,6 @@ export interface DocumentResult {
   run_id: string;
 }
 
-export interface KnowledgeBaseResult {
-  results: Array<{
-    chunk_id: string;
-    document_id: string;
-    document_name: string;
-    content: string;
-    similarity_score: number;
-    metadata: Record<string, unknown>;
-  }>;
-}
-
-export interface Deal {
-  id: string;
-  name: string;
-  status?: string;
-  amount?: number;
-  close_date?: string;
-  client?: { name: string; industry?: string };
-  competitors?: string[];
-  summary?: string;
-  similarity_score?: number;
-  semantic_match_reasons?: string[];
-}
-
-export interface SelectDealResult {
-  deals: Deal[];
-  total_count: number;
-}
-
-export interface SearchDealsResult {
-  deals: Deal[];
-}
-
-export interface SearchAcrossDealsResult {
-  results: Array<{
-    deal_id: string;
-    deal_name: string;
-    deal_stage?: string;
-    document_id: string;
-    document_name: string;
-    content: string;
-    similarity_score: number;
-    created_at?: string;
-  }>;
-}
-
-export interface SearchDealDocumentsResult {
-  results: Array<{
-    deal_id: string;
-    deal_name: string;
-    document_id: string;
-    document_name: string;
-    document_type?: string;
-    content: string;
-    similarity_score: number;
-    metadata?: Record<string, unknown>;
-  }>;
-}
-
-export interface SearchCompetitorsResult {
-  competitor: {
-    id: string;
-    name: string;
-    website?: string;
-  };
-  results: Array<{
-    chunk_id: string;
-    document_id: string;
-    document_name: string;
-    content: string;
-    similarity_score: number;
-    source?: string;
-    metadata?: Record<string, unknown>;
-  }>;
-  battlecard_url?: string;
-}
-
-export interface GetAssetsResult {
-  documents: Array<{
-    id: string;
-    file_name: string;
-    created_at: string;
-    competitor_id?: string;
-    url: string;
-  }>;
-}
-
-export interface HindsightError {
-  error: {
-    code: string;
-    message: string;
-    details: Record<string, unknown>;
-  };
-}
-
 export class HindsightClient {
   private apiKey: string;
 
@@ -144,32 +49,35 @@ export class HindsightClient {
       ...((options.headers as Record<string, string>) || {}),
     };
 
+    const isFormData = typeof options.body === "object" && options.body !== null && typeof options.body !== "string";
+
     if (options.body && typeof options.body === "string") {
       headers["Content-Type"] = "application/json";
     }
 
     const response = await fetch(url, {
       ...options,
-      headers,
+      // For FormData, omit explicit headers so fetch auto-sets Content-Type with boundary
+      headers: isFormData ? { Authorization: headers.Authorization } : headers,
     });
 
     if (!response.ok) {
-      const errorBody = (await response.json().catch(() => ({
-        error: {
-          code: `http_${response.status}`,
-          message: response.statusText,
-          details: {},
-        },
-      }))) as HindsightError;
+      let message = response.statusText;
+      try {
+        const errorBody = await response.json();
+        message = errorBody?.error?.message ?? errorBody?.message ?? response.statusText;
+      } catch {
+        // JSON parse failed, use statusText
+      }
       throw new Error(
-        `Hindsight API error (${response.status}): ${errorBody.error.message}`
+        `Hindsight API error (${response.status}): ${message}`
       );
     }
 
     return response.json() as Promise<T>;
   }
 
-  // REST API: POST /responses
+  // POST /responses — AI-orchestrated Q&A with citations
   async createResponse(
     messages: Array<{ role: string; content: string }>,
     stream: boolean = false
@@ -180,7 +88,7 @@ export class HindsightClient {
     });
   }
 
-  // Document Upload: POST /documents/library
+  // POST /documents/library — upload to knowledge base
   async uploadToLibrary(params: {
     file_name: string;
     file_url?: string;
@@ -207,7 +115,7 @@ export class HindsightClient {
     });
   }
 
-  // Document Upload: POST /deals/documents
+  // POST /deals/documents — upload document to deal
   async uploadToDeal(params: {
     file_name: string;
     file_url?: string;
@@ -230,120 +138,6 @@ export class HindsightClient {
     return this.request<DocumentResult>("/deals/documents", {
       method: "POST",
       body: formData as unknown as BodyInit,
-    });
-  }
-
-  // MCP Tool: search_knowledge_base
-  async searchKnowledgeBase(params: {
-    query: string;
-    limit?: number;
-  }): Promise<KnowledgeBaseResult> {
-    return this.request<KnowledgeBaseResult>("/mcp/search_knowledge_base", {
-      method: "POST",
-      body: JSON.stringify({
-        query: params.query,
-        limit: params.limit ?? 10,
-      }),
-    });
-  }
-
-  // MCP Tool: select_deal
-  async selectDeal(params: {
-    filters?: {
-      status?: string[];
-      amount?: { min?: number; max?: number };
-      competitors?: string[];
-      date_range?: { start?: string; end?: string };
-    };
-    limit?: number;
-  }): Promise<SelectDealResult> {
-    return this.request<SelectDealResult>("/mcp/select_deal", {
-      method: "POST",
-      body: JSON.stringify({
-        filters: params.filters,
-        limit: params.limit ?? 20,
-      }),
-    });
-  }
-
-  // MCP Tool: search_across_deals
-  async searchAcrossDeals(params: {
-    query: string;
-    limit?: number;
-    include_deal_metadata?: boolean;
-  }): Promise<SearchAcrossDealsResult> {
-    return this.request<SearchAcrossDealsResult>("/mcp/search_across_deals", {
-      method: "POST",
-      body: JSON.stringify({
-        query: params.query,
-        limit: params.limit ?? 15,
-        include_deal_metadata: params.include_deal_metadata ?? true,
-      }),
-    });
-  }
-
-  // MCP Tool: search_deal_documents
-  async searchDealDocuments(params: {
-    deal_ids: string[];
-    query: string;
-    document_types?: string[];
-    limit?: number;
-  }): Promise<SearchDealDocumentsResult> {
-    return this.request<SearchDealDocumentsResult>(
-      "/mcp/search_deal_documents",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          deal_ids: params.deal_ids,
-          query: params.query,
-          document_types: params.document_types,
-          limit: params.limit ?? 30,
-        }),
-      }
-    );
-  }
-
-  // MCP Tool: search_deals
-  async searchDeals(params: {
-    query: string;
-    limit?: number;
-  }): Promise<SearchDealsResult> {
-    return this.request<SearchDealsResult>("/mcp/search_deals", {
-      method: "POST",
-      body: JSON.stringify({
-        query: params.query,
-        limit: params.limit ?? 10,
-      }),
-    });
-  }
-
-  // MCP Tool: search_competitors
-  async searchCompetitors(params: {
-    query: string;
-    competitor_id?: string;
-    source?: string;
-    limit?: number;
-  }): Promise<SearchCompetitorsResult> {
-    return this.request<SearchCompetitorsResult>("/mcp/search_competitors", {
-      method: "POST",
-      body: JSON.stringify({
-        query: params.query,
-        competitor_id: params.competitor_id,
-        source: params.source,
-        limit: params.limit ?? 20,
-      }),
-    });
-  }
-
-  // MCP Tool: get_assets
-  async getAssets(params: {
-    keyword_query: string;
-  }): Promise<GetAssetsResult> {
-    return this.request<GetAssetsResult>("/mcp/get_assets", {
-      method: "POST",
-      body: JSON.stringify({
-        keyword_query: params.keyword_query,
-      }),
     });
   }
 }
