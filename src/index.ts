@@ -10,6 +10,19 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
 
+// --- Helper to format a ResponseResult into MCP tool output ---
+
+function formatResponse(result: { message: { content: string; citations?: Array<{ document_name: string; url: string; excerpt: string }> } }): { content: Array<{ type: "text"; text: string }> } {
+  let text = result.message.content;
+  if (result.message.citations && result.message.citations.length > 0) {
+    text += "\n\n---\nCitations:\n";
+    for (const citation of result.message.citations) {
+      text += `- [${citation.document_name}](${citation.url}): ${citation.excerpt}\n`;
+    }
+  }
+  return { content: [{ type: "text" as const, text }] };
+}
+
 // --- Tool registration (shared across all sessions) ---
 
 function createHindsightServer(getClient: () => HindsightClient): McpServer {
@@ -18,184 +31,24 @@ function createHindsightServer(getClient: () => HindsightClient): McpServer {
     version: "1.0.0",
   });
 
-  // Tool 1: search_knowledge_base
-  server.tool(
-    "search_knowledge_base",
-    "Search across all uploaded competitive intelligence documents in the Hindsight knowledge base",
-    {
-      query: z.string().describe("Search query for competitive intelligence documents"),
-      limit: z.number().optional().default(10).describe("Maximum number of results to return"),
-    },
-    async ({ query, limit }) => {
-      try {
-        const result = await getClient().searchKnowledgeBase({ query, limit });
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-      } catch (error) {
-        return { content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }], isError: true };
-      }
-    }
-  );
-
-  // Tool 2: select_deal
-  server.tool(
-    "select_deal",
-    "Find deals based on stage, amount, competitor, product, or other filters",
-    {
-      status: z.array(z.string()).optional().describe('Deal statuses to filter by, e.g. ["Closed Won", "Closed Lost"]'),
-      amount_min: z.number().optional().describe("Minimum deal amount"),
-      amount_max: z.number().optional().describe("Maximum deal amount"),
-      competitors: z.array(z.string()).optional().describe("Competitor IDs to filter by"),
-      date_start: z.string().optional().describe("Start date for date range filter (YYYY-MM-DD)"),
-      date_end: z.string().optional().describe("End date for date range filter (YYYY-MM-DD)"),
-      limit: z.number().optional().default(20).describe("Maximum number of deals to return"),
-    },
-    async ({ status, amount_min, amount_max, competitors, date_start, date_end, limit }) => {
-      try {
-        const filters: Record<string, unknown> = {};
-        if (status) filters.status = status;
-        if (amount_min !== undefined || amount_max !== undefined) {
-          filters.amount = {
-            ...(amount_min !== undefined && { min: amount_min }),
-            ...(amount_max !== undefined && { max: amount_max }),
-          };
-        }
-        if (competitors) filters.competitors = competitors;
-        if (date_start || date_end) {
-          filters.date_range = {
-            ...(date_start && { start: date_start }),
-            ...(date_end && { end: date_end }),
-          };
-        }
-        const result = await getClient().selectDeal({
-          filters: Object.keys(filters).length > 0 ? (filters as any) : undefined,
-          limit,
-        });
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-      } catch (error) {
-        return { content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }], isError: true };
-      }
-    }
-  );
-
-  // Tool 3: search_across_deals
-  server.tool(
-    "search_across_deals",
-    "Perform semantic vector search across all deal documents to find relevant content",
-    {
-      query: z.string().describe("Semantic search query across deal documents"),
-      limit: z.number().optional().default(15).describe("Maximum number of results to return"),
-      include_deal_metadata: z.boolean().optional().default(true).describe("Whether to include deal metadata in results"),
-    },
-    async ({ query, limit, include_deal_metadata }) => {
-      try {
-        const result = await getClient().searchAcrossDeals({ query, limit, include_deal_metadata });
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-      } catch (error) {
-        return { content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }], isError: true };
-      }
-    }
-  );
-
-  // Tool 4: search_deal_documents
-  server.tool(
-    "search_deal_documents",
-    "Deep search within specific identified deals for relevant document content",
-    {
-      deal_ids: z.array(z.string()).describe("Array of deal IDs to search within"),
-      query: z.string().describe("Search query for deal documents"),
-      document_types: z.array(z.string()).optional().describe('Document types to filter by, e.g. ["email", "meeting"]'),
-      limit: z.number().optional().default(30).describe("Maximum number of results to return"),
-    },
-    async ({ deal_ids, query, document_types, limit }) => {
-      try {
-        const result = await getClient().searchDealDocuments({ deal_ids, query, document_types, limit });
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-      } catch (error) {
-        return { content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }], isError: true };
-      }
-    }
-  );
-
-  // Tool 5: search_deals
-  server.tool(
-    "search_deals",
-    "Find deals using AI embeddings to understand conceptual similarity",
-    {
-      query: z.string().describe("Semantic search query to find conceptually similar deals"),
-      limit: z.number().optional().default(10).describe("Maximum number of deals to return"),
-    },
-    async ({ query, limit }) => {
-      try {
-        const result = await getClient().searchDeals({ query, limit });
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-      } catch (error) {
-        return { content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }], isError: true };
-      }
-    }
-  );
-
-  // Tool 6: search_competitors
-  server.tool(
-    "search_competitors",
-    "Search competitive intelligence database for specific competitor information",
-    {
-      query: z.string().describe("Search query for competitor intelligence"),
-      competitor_id: z.string().optional().describe("Specific competitor ID to search"),
-      source: z.enum(["g2", "linkedin", "x", "reddit", "discord", "slack"]).optional().describe("Filter results by source platform"),
-      limit: z.number().optional().default(20).describe("Maximum number of results to return"),
-    },
-    async ({ query, competitor_id, source, limit }) => {
-      try {
-        const result = await getClient().searchCompetitors({ query, competitor_id, source, limit });
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-      } catch (error) {
-        return { content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }], isError: true };
-      }
-    }
-  );
-
-  // Tool 7: get_assets
-  server.tool(
-    "get_assets",
-    "Search for specific documents by name or keyword in the Hindsight library",
-    {
-      keyword_query: z.string().describe("Keyword to search for documents"),
-    },
-    async ({ keyword_query }) => {
-      try {
-        const result = await getClient().getAssets({ keyword_query });
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-      } catch (error) {
-        return { content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }], isError: true };
-      }
-    }
-  );
-
-  // Tool 8: ask_hindsight
+  // Tool 1: ask_hindsight
   server.tool(
     "ask_hindsight",
-    "Ask Hindsight a question and get a complete, synthesized answer with citations. Uses Hindsight's AI to automatically orchestrate multiple searches and return formatted responses.",
+    "Ask Hindsight a question and get a complete, synthesized answer with citations. Uses Hindsight's AI to automatically orchestrate searches across deals, competitors, documents, and the knowledge base. Use this for any question about competitive intelligence, win-loss analysis, deal insights, competitor research, or document search.",
     {
       question: z.string().describe("Natural language question about deals, competitors, or competitive intelligence"),
     },
     async ({ question }) => {
       try {
         const result = await getClient().createResponse([{ role: "user", content: question }]);
-        let text = result.message.content;
-        if (result.message.citations?.length > 0) {
-          text += "\n\n---\nCitations:\n";
-          for (const citation of result.message.citations) {
-            text += `- [${citation.document_name}](${citation.url}): ${citation.excerpt}\n`;
-          }
-        }
-        return { content: [{ type: "text" as const, text }] };
+        return formatResponse(result);
       } catch (error) {
         return { content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }], isError: true };
       }
     }
   );
 
-  // Tool 9: upload_document_to_library
+  // Tool 2: upload_document_to_library
   server.tool(
     "upload_document_to_library",
     "Upload a competitive intelligence document to the Hindsight knowledge base",
@@ -221,7 +74,7 @@ function createHindsightServer(getClient: () => HindsightClient): McpServer {
     }
   );
 
-  // Tool 10: upload_document_to_deal
+  // Tool 3: upload_document_to_deal
   server.tool(
     "upload_document_to_deal",
     "Associate a document with a specific deal for win-loss analysis",
