@@ -48,58 +48,6 @@ function createHindsightServer(getClient: () => HindsightClient): McpServer {
     }
   );
 
-  // Tool 2: upload_document_to_library
-  server.tool(
-    "upload_document_to_library",
-    "Upload a competitive intelligence document to the Hindsight knowledge base",
-    {
-      file_name: z.string().describe("Name of the file"),
-      file_url: z.string().describe("URL to download the file from"),
-      content_type: z.string().describe("MIME type (e.g., application/pdf, text/markdown)"),
-      type: z.enum(["asset", "intel"]).describe('Document type: "asset" or "intel"'),
-      competitor_id: z.string().optional().describe("Hindsight competitor ID"),
-      competitor_name: z.string().optional().describe("Competitor name (resolved to ID automatically)"),
-      source: z.string().optional().describe('Source application: "drive", "notion", "confluence", "onedrive", "sharepoint", "vanta", "url", "zapier", "api"'),
-    },
-    async ({ file_name, file_url, content_type, type, competitor_id, competitor_name, source }) => {
-      try {
-        if (!competitor_id && !competitor_name) {
-          return { content: [{ type: "text" as const, text: "Error: Either competitor_id or competitor_name is required" }], isError: true };
-        }
-        const result = await getClient().uploadToLibrary({ file_name, file_url, content_type, type, competitor_id, competitor_name, source });
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-      } catch (error) {
-        return { content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }], isError: true };
-      }
-    }
-  );
-
-  // Tool 3: upload_document_to_deal
-  server.tool(
-    "upload_document_to_deal",
-    "Associate a document with a specific deal for win-loss analysis",
-    {
-      file_name: z.string().describe("Name of the file"),
-      file_url: z.string().describe("URL to download the file from"),
-      content_type: z.string().describe("MIME type (e.g., application/pdf, audio/mpeg)"),
-      deal_id: z.string().optional().describe("Hindsight deal ID"),
-      salesforce_id: z.string().optional().describe("Salesforce Opportunity ID"),
-      hubspot_id: z.string().optional().describe("HubSpot Deal ID"),
-      source: z.string().optional().describe('Source application: "gong", "clari", "fathom", "fireflies", "avoma", "outreach", "gmail", "Salesforce", "Hubspot", "api"'),
-    },
-    async ({ file_name, file_url, content_type, deal_id, salesforce_id, hubspot_id, source }) => {
-      try {
-        if (!deal_id && !salesforce_id && !hubspot_id) {
-          return { content: [{ type: "text" as const, text: "Error: One of deal_id, salesforce_id, or hubspot_id is required" }], isError: true };
-        }
-        const result = await getClient().uploadToDeal({ file_name, file_url, content_type, deal_id, salesforce_id, hubspot_id, source });
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-      } catch (error) {
-        return { content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }], isError: true };
-      }
-    }
-  );
-
   return server;
 }
 
