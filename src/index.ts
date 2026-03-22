@@ -79,6 +79,16 @@ app.get("/health", (_req, res) => {
 
 // MCP endpoint — handles POST (messages) and GET (SSE stream) and DELETE (session teardown)
 app.all("/mcp", async (req, res) => {
+  // Delegate to the shared handler
+  return handleMcp(req, res);
+});
+
+// Also serve MCP at root path for clients that connect without /mcp suffix
+app.all("/", async (req, res) => {
+  return handleMcp(req, res);
+});
+
+async function handleMcp(req: import("express").Request, res: import("express").Response) {
   const apiKey = extractApiKey(req);
   if (!apiKey) {
     res.status(401).json({
@@ -160,9 +170,9 @@ app.all("/mcp", async (req, res) => {
   }
 
   res.status(405).json({ error: { code: "method_not_allowed", message: "Use POST, GET, or DELETE", details: {} } });
-});
+}
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Hindsight MCP server listening on http://0.0.0.0:${PORT}/mcp`);
+  console.log(`Hindsight MCP server listening on http://0.0.0.0:${PORT}`);
   console.log("Connect with: { \"url\": \"http://localhost:" + PORT + "/mcp\", \"headers\": { \"Authorization\": \"Bearer YOUR_API_KEY\" } }");
 });
