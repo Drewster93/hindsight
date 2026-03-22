@@ -314,7 +314,14 @@ app.all("/mcp", async (req, res) => {
     // Existing session
     if (sessionId && sessions.has(sessionId)) {
       const session = sessions.get(sessionId)!;
-      await session.transport.handleRequest(req, res, req.body);
+      try {
+        await session.transport.handleRequest(req, res, req.body);
+      } catch (error) {
+        console.error(`[session:${sessionId}] Error handling request:`, error);
+        if (!res.headersSent) {
+          res.status(500).json({ error: { code: "internal_error", message: (error as Error).message, details: {} } });
+        }
+      }
       return;
     }
 
@@ -334,7 +341,14 @@ app.all("/mcp", async (req, res) => {
     };
     transport.onclose = onClose;
 
-    await transport.handleRequest(req, res, req.body);
+    try {
+      await transport.handleRequest(req, res, req.body);
+    } catch (error) {
+      console.error("[new-session] Error handling request:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: { code: "internal_error", message: (error as Error).message, details: {} } });
+      }
+    }
 
     // Now the transport has a sessionId
     const newSessionId = transport.sessionId;

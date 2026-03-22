@@ -144,25 +144,29 @@ export class HindsightClient {
       ...((options.headers as Record<string, string>) || {}),
     };
 
+    const isFormData = typeof options.body === "object" && options.body !== null && !(typeof options.body === "string");
+
     if (options.body && typeof options.body === "string") {
       headers["Content-Type"] = "application/json";
     }
 
     const response = await fetch(url, {
       ...options,
-      headers,
+      // For FormData, omit explicit headers so fetch auto-sets Content-Type with boundary
+      headers: isFormData ? { Authorization: headers.Authorization } : headers,
     });
 
     if (!response.ok) {
-      const errorBody = (await response.json().catch(() => ({
-        error: {
-          code: `http_${response.status}`,
-          message: response.statusText,
-          details: {},
-        },
-      }))) as HindsightError;
+      let message = response.statusText;
+      try {
+        const errorBody = await response.json();
+        // Handle both { error: { message } } and { message } formats
+        message = errorBody?.error?.message ?? errorBody?.message ?? response.statusText;
+      } catch {
+        // JSON parse failed, use statusText
+      }
       throw new Error(
-        `Hindsight API error (${response.status}): ${errorBody.error.message}`
+        `Hindsight API error (${response.status}): ${message}`
       );
     }
 
